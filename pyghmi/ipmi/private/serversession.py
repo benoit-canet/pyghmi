@@ -230,13 +230,14 @@ class IpmiServer(object):
     #authentication type fixed to ipmi2, ipmi1 forbidden
     # 0b10000000
 
-    def __init__(self, authdata, port=623, bmcuuid=None):
+    def __init__(self, authdata, address = "::", port=623, bmcuuid=None):
         """Create a new ipmi bmc instance.
 
         :param authdata: A dict or object with .get() to provide password
                         lookup by username.  This does not support the full
                         complexity of what IPMI can support, only a
                         reasonable subset.
+        :param address: The address to listen to.
         :param port: The default port number to bind to.  Defaults to the
                      standard 623
         """
@@ -263,7 +264,7 @@ class IpmiServer(object):
         self.kg = None
         self.timeout = 60
         self.serversocket = ipmisession.Session._assignsocket(
-            ('::', port, 0, 0))
+            (address, port))
         ipmisession.Session.bmc_handlers[self.serversocket] = self
 
     def send_auth_cap(self, myaddr, mylun, clientaddr, clientlun, sockaddr):

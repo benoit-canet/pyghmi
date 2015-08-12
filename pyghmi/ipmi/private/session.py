@@ -55,13 +55,14 @@ MAX_BMCS_PER_SOCKET = 64  # no more than this many BMCs will share a socket
                          # this could be adjusted based on rmem_max
                          # value, leading to fewer filehandles
 
+server_address = None
 
 def define_worker():
     class _IOWorker(threading.Thread):
         def join(self):
             Session._cleanup()
             self.running = False
-            iosockets[0].sendto('\x01', ('::1', iosockets[0].getsockname()[1]))
+            iosockets[0].sendto('\x01', (server_address, iosockets[0].getsockname()[1]))
             super(_IOWorker, self).join()
 
         def run(self):
@@ -128,7 +129,7 @@ def _io_wait(timeout):
     # it piggy back on the select() in the io thread, which is a truly
     # lazy wait even with eventlet involvement
     if deadline < selectdeadline:
-        iosockets[0].sendto('\x01', ('::1', iosockets[0].getsockname()[1]))
+        iosockets[0].sendto('\x01', (server_address, iosockets[0].getsockname()[1]))
     evt.wait()
 
 
@@ -288,6 +289,8 @@ class Session(object):
         global iothread
         global iothreadready
         global iosockets
+        global server_address
+        server_address = server[0]
         # seek for the least used socket.  As sessions close, they may free
         # up slots in seemingly 'full' sockets.  This scheme allows those
         # slots to be recycled
@@ -299,13 +302,12 @@ class Session(object):
             cls.socketpool[sorted_candidates[0][0]] += 1
             return sorted_candidates[0][0]
         # we need a new socket
-        tmpsocket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)  # INET6
-                                    # can do IPv4 if you are nice to it
-        tmpsocket.setsockopt(IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+        tmpsocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # INET6
+        tmpsocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         # Rather than wait until send() to bind, bind now so that we have
         # a port number allocated no matter what
-        tmpsocket.bind(('', 0))
         if server is None:
+            tmpsocket.bind(('', 0))
             cls.socketpool[tmpsocket] = 1
         else:
             tmpsocket.bind(server)
